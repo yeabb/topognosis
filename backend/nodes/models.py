@@ -12,7 +12,13 @@ class Node(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     graph = models.ForeignKey('graphs.Graph', on_delete=models.CASCADE, related_name='nodes')
     parents = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='children')
+    # User-defined or auto-derived from summary. Placeholder is first message truncated.
     label = models.CharField(max_length=255, blank=True)
+
+    # AI-generated 1-2 sentence summary of what happened in this node.
+    # Blank while node is active. Generated lazily on hover/view or forced on push to platform.
+    summary = models.TextField(blank=True)
+
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
 
     # Full materialized conversation context up to this node
