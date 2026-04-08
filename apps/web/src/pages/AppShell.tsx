@@ -43,7 +43,7 @@ export default function AppShell() {
       />
       <main className="flex-1 flex overflow-hidden">
         <div className="flex-1 overflow-hidden">
-          <ChatPanel messages={messages} onSend={handleSend} loading={chatLoading} />
+          <ChatPanel activeGraph={activeGraph} messages={messages} onSend={handleSend} loading={chatLoading} />
         </div>
         <div className="w-[380px] shrink-0 overflow-hidden">
           <GraphPanel />
