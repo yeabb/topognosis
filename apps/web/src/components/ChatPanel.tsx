@@ -23,7 +23,6 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
     if (!trimmed || loading) return
     onSend(trimmed)
     setInput('')
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -46,7 +45,7 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
   const isEmpty = messages.length === 0
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full">
       {/* Model indicator */}
       <div className="flex items-center justify-center py-3 border-b border-white/[0.06]">
         <div className="flex items-center gap-1.5 text-neutral-400 text-sm cursor-pointer hover:text-neutral-200 transition">
@@ -60,16 +59,16 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 px-8">
+          <div className="flex flex-col items-center justify-center h-full gap-3 px-8 text-center">
             <h2 className="text-white text-xl font-medium">
               {activeGraph ? activeGraph.name : 'New graph'}
             </h2>
-            <p className="text-neutral-500 text-sm text-center">
+            <p className="text-neutral-500 text-sm">
               Start a conversation. Your reasoning will be captured as a navigable graph.
             </p>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col gap-6">
+          <div className="w-full px-6 py-8 flex flex-col gap-6">
             {messages.map((msg, i) => (
               <div key={i} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 {msg.role === 'assistant' && (
@@ -79,7 +78,7 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
                   className={`text-sm leading-relaxed whitespace-pre-wrap ${
                     msg.role === 'user'
                       ? 'bg-[#2f2f2f] text-white rounded-3xl px-5 py-3 max-w-[85%]'
-                      : 'text-neutral-200 max-w-full'
+                      : 'text-neutral-200 w-full'
                   }`}
                 >
                   {msg.content}
@@ -101,37 +100,35 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
         )}
       </div>
 
-      {/* Input */}
-      <div className={`px-4 pb-4 ${isEmpty ? '' : 'border-t border-white/[0.06] pt-4'}`}>
-        <div className="max-w-3xl mx-auto">
-          <form
-            onSubmit={handleSubmit}
-            className="flex items-end gap-2 rounded-3xl bg-[#2f2f2f] px-4 py-3"
+      {/* Input — always full width of the panel */}
+      <div className="border-t border-white/[0.06]" style={{ padding: '24px 80px 32px' }}>
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-end gap-3 rounded-3xl bg-[#2f2f2f] px-6 py-4"
+        >
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder="What's on your mind?"
+            rows={1}
+            className="flex-1 resize-none bg-transparent text-sm text-white placeholder:text-neutral-500 outline-none leading-relaxed"
+            style={{ minHeight: '24px', maxHeight: '200px', paddingLeft: '8px' }}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || loading}
+            className="shrink-0 w-8 h-8 rounded-full bg-white hover:bg-neutral-200 disabled:bg-neutral-700 disabled:cursor-not-allowed flex items-center justify-center transition"
           >
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              placeholder="Message topognosis…"
-              rows={1}
-              className="flex-1 resize-none bg-transparent text-sm text-white placeholder:text-neutral-500 outline-none leading-relaxed"
-              style={{ minHeight: '24px', maxHeight: '200px' }}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || loading}
-              className="shrink-0 w-8 h-8 rounded-full bg-white hover:bg-neutral-200 disabled:bg-neutral-700 disabled:cursor-not-allowed flex items-center justify-center transition"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-black disabled:text-neutral-500 translate-y-[-1px]">
-                <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
-            </button>
-          </form>
-          <p className="text-neutral-700 text-xs mt-2 text-center">
-            Enter to send · Shift+Enter for new line
-          </p>
-        </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-black">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+          </button>
+        </form>
+        <p className="text-neutral-700 text-xs mt-3 text-center">
+          Enter to send · Shift+Enter for new line
+        </p>
       </div>
     </div>
   )
