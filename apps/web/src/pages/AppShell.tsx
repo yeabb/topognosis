@@ -3,6 +3,7 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'reac
 import Sidebar from '../components/Sidebar'
 import ChatPanel from '../components/ChatPanel'
 import GraphPanel from '../components/GraphPanel'
+import client from '../api/client'
 import type { Graph, Message } from '../types'
 
 export default function AppShell() {
@@ -10,30 +11,97 @@ export default function AppShell() {
   const [messages, setMessages] = useState<Message[]>([])
   const [chatLoading, setChatLoading] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarKey, setSidebarKey] = useState(0) // used to refresh sidebar graph list
 
   function handleSelectGraph(graph: Graph) {
     setActiveGraph(graph)
     setMessages([])
   }
 
-  function handleNewGraph() {
-    setActiveGraph(null)
+  async function handleNewGraph() {
+    const res = await client.post<Graph>('/graphs/', { name: 'New graph' })
+    setActiveGraph(res.data)
     setMessages([])
+    setSidebarKey((k) => k + 1)
   }
 
-  function handleSend(content: string) {
+  async function handleSend(content: string) {
+    if (!activeGraph) {
+      // Auto-create a graph if none is active
+      const res = await client.post<Graph>('/graphs/', { name: 'New graph' })
+      setActiveGraph(res.data)
+      setSidebarKey((k) => k + 1)
+      sendMessage(res.data.id, content)
+      return
+    }
+    sendMessage(activeGraph.id, content)
+  }
+
+  async function sendMessage(graphId: string, content: string) {
     const userMessage: Message = { role: 'user', content }
     setMessages((prev) => [...prev, userMessage])
     setChatLoading(true)
 
-    // TODO: wire to API in next task
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: '(API not wired yet — coming next task)' },
-      ])
+    let assistantContent = ''
+    setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
+
+    try {
+      const token = localStorage.getItem('access_token')
+      const response = await fetch(`/api/graphs/${graphId}/chat/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: content }),
+      })
+
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n').filter((l) => l.startsWith('data: '))
+
+        for (const line of lines) {
+          const data = JSON.parse(line.slice(6))
+
+          if (data.error) {
+            setMessages((prev) => {
+              const updated = [...prev]
+              updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
+              return updated
+            })
+            break
+          }
+
+          if (data.text) {
+            assistantContent += data.text
+            setMessages((prev) => {
+              const updated = [...prev]
+              updated[updated.length - 1] = { role: 'assistant', content: assistantContent }
+              return updated
+            })
+          }
+
+          if (data.done && data.graph_name) {
+            setActiveGraph((prev) => prev ? { ...prev, name: data.graph_name } : prev)
+            setSidebarKey((k) => k + 1)
+          }
+        }
+      }
+    } catch {
+      setMessages((prev) => {
+        const updated = [...prev]
+        updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
+        return updated
+      })
+    } finally {
       setChatLoading(false)
-    }, 800)
+    }
   }
 
   return (
@@ -45,6 +113,7 @@ export default function AppShell() {
         }`}
       >
         <Sidebar
+          key={sidebarKey}
           activeGraphId={activeGraph?.id ?? null}
           onSelectGraph={handleSelectGraph}
           onNewGraph={handleNewGraph}
@@ -53,7 +122,7 @@ export default function AppShell() {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Collapse toggle button */}
+        {/* Collapse toggle */}
         <button
           onClick={() => setSidebarCollapsed((v) => !v)}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -68,7 +137,6 @@ export default function AppShell() {
           </svg>
         </button>
 
-        {/* Resizable chat + graph panels */}
         <PanelGroup direction="horizontal" className="flex-1">
           <Panel defaultSize={60} minSize={30}>
             <ChatPanel

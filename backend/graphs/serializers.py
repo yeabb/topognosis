@@ -8,4 +8,4 @@ class GraphSerializer(serializers.ModelSerializer):
     class Meta:
         model = Graph
         fields = ('id', 'owner', 'name', 'description', 'visibility', 'slug', 'created_at', 'updated_at')
-        read_only_fields = ('id', 'owner', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'owner', 'slug', 'created_at', 'updated_at')
