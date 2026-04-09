@@ -34,19 +34,19 @@ export default function AppShell() {
     setSidebarKey((k) => k + 1)
   }
 
-  async function handleSend(content: string) {
+  async function handleSend(content: string, model: string) {
     if (!activeGraph) {
       // Auto-create a graph if none is active
       const res = await client.post<Graph>('/graphs/', { name: 'New graph' })
       setActiveGraph(res.data)
       setSidebarKey((k) => k + 1)
-      sendMessage(res.data.id, content)
+      sendMessage(res.data.id, content, model)
       return
     }
-    sendMessage(activeGraph.id, content)
+    sendMessage(activeGraph.id, content, model)
   }
 
-  async function sendMessage(graphId: string, content: string) {
+  async function sendMessage(graphId: string, content: string, model: string) {
     const userMessage: Message = { role: 'user', content }
     setMessages((prev) => [...prev, userMessage])
     setChatLoading(true)
@@ -62,7 +62,7 @@ export default function AppShell() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify({ message: content, model }),
       })
 
       const reader = response.body!.getReader()
