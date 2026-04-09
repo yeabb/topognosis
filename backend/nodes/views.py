@@ -1,8 +1,13 @@
+import logging
+
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+
 from .models import Node
 from .serializers import NodeSerializer, NodeUpdateSerializer, NodeCheckoutSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class NodeListCreateView(generics.ListCreateAPIView):
@@ -41,3 +46,51 @@ def checkout_node(request, pk):
         'git_hash': node.git_hash,
     })
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def branch_node(request, pk):
+    """
+    Create a new child node branched from a specific message index in the parent node.
+    The new node's context is parent.materialized_context[:branch_from_index+1].
+    """
+    try:
+        parent = Node.objects.get(pk=pk, graph__owner=request.user)
+    except Node.DoesNotExist:
+        return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    branch_from_index = request.data.get('branch_from_index')
+    if branch_from_index is None:
+        return Response({'detail': 'branch_from_index is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        branch_from_index = int(branch_from_index)
+    except (TypeError, ValueError):
+        return Response({'detail': 'branch_from_index must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    context = parent.materialized_context
+    if branch_from_index < 0 or branch_from_index >= len(context):
+        return Response({'detail': 'branch_from_index out of range.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    sliced_context = context[:branch_from_index + 1]
+
+    # Derive label from the message being branched from
+    branch_msg = context[branch_from_index]
+    branch_label = (branch_msg.get('content', '') or '')[:80]
+
+    child = Node.objects.create(
+        graph=parent.graph,
+        label=branch_label,
+        model=parent.model,
+        tool=parent.tool,
+        status='active',
+        materialized_context=sliced_context,
+        inherited_context_length=len(sliced_context),
+    )
+    child.parents.add(parent)
+
+    logger.info(f'Branched node {child.id} from {parent.id} at index {branch_from_index}')
+
+    serializer = NodeSerializer(child)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)

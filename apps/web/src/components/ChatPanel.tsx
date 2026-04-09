@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import type { Graph, Message } from '../types'
+import type { Graph, Message } from '../types/index'
 
 interface Model {
   id: string
@@ -19,14 +19,17 @@ const MODELS: Model[] = [
 interface Props {
   activeGraph: Graph | null
   messages: Message[]
+  inheritedContextLength: number
   onSend: (content: string, model: string) => void
+  onBranch: (messageIndex: number) => void
   loading: boolean
 }
 
-export default function ChatPanel({ activeGraph, messages, onSend, loading }: Props) {
+export default function ChatPanel({ activeGraph, messages, inheritedContextLength, onSend, onBranch, loading }: Props) {
   const [input, setInput] = useState('')
   const [selectedModel, setSelectedModel] = useState(MODELS[0])
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [hoveredMsgIndex, setHoveredMsgIndex] = useState<number | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -121,35 +124,96 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
           </div>
         ) : (
           <div className="w-full py-8 flex flex-col gap-6" style={{ paddingLeft: '80px', paddingRight: '80px' }}>
+
+            {/* Inherited context divider — shown at top if this is a branch */}
+            {inheritedContextLength > 0 && (
+              <div className="flex items-center gap-3 py-1">
+                <div className="flex-1 h-px bg-white/[0.06]" />
+                <span className="text-xs text-neutral-600 shrink-0">branched from here</span>
+                <div className="flex-1 h-px bg-white/[0.06]" />
+              </div>
+            )}
+
             {messages.map((msg, i) => {
+              const isInherited = i < inheritedContextLength
               const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1
               const isStreaming = isLastAssistant && loading
+
               return (
-                <div key={i} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  {msg.role === 'assistant' && (
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="text-neutral-600 text-xs">Claude</span>
-                      {isStreaming && (
-                        <div className="flex gap-1">
-                          <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
-                      )}
+                <div key={i}>
+                  {/* Divider between inherited and new messages */}
+                  {inheritedContextLength > 0 && i === inheritedContextLength && (
+                    <div className="flex items-center gap-3 py-1 mb-6">
+                      <div className="flex-1 h-px bg-indigo-500/30" />
+                      <span className="text-xs text-indigo-400/70 shrink-0">new branch</span>
+                      <div className="flex-1 h-px bg-indigo-500/30" />
                     </div>
                   )}
+
                   <div
-                    className={`text-sm leading-relaxed whitespace-pre-wrap ${
-                      msg.role === 'user'
-                        ? 'bg-[#2f2f2f] text-white rounded-3xl px-5 py-3 max-w-[85%]'
-                        : 'text-neutral-200 w-full'
-                    }`}
+                    className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                    style={{ opacity: isInherited ? 0.45 : 1, transition: 'opacity 0.15s' }}
+                    onMouseEnter={() => msg.role === 'assistant' && setHoveredMsgIndex(i)}
+                    onMouseLeave={() => setHoveredMsgIndex(null)}
                   >
-                    {msg.role === 'assistant' ? (
-                      <div className="prose prose-invert prose-sm max-w-none">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    {msg.role === 'assistant' && (
+                      <div className="flex items-center gap-2 px-1 w-full justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-neutral-600 text-xs">Claude</span>
+                          {isStreaming && (
+                            <div className="flex gap-1">
+                              <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Branch button — visible on hover of any AI message */}
+                        {!isStreaming && (
+                          <button
+                            onClick={() => onBranch(i)}
+                            title="Branch from here"
+                            style={{
+                              opacity: hoveredMsgIndex === i ? 1 : 0,
+                              transition: 'opacity 0.15s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                              border: '1px solid rgba(99,102,241,0.3)',
+                              background: 'rgba(99,102,241,0.08)',
+                              color: '#818cf8',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="6" y1="3" x2="6" y2="15" />
+                              <circle cx="18" cy="6" r="3" />
+                              <circle cx="6" cy="18" r="3" />
+                              <path d="M18 9a9 9 0 0 1-9 9" />
+                            </svg>
+                            Branch
+                          </button>
+                        )}
                       </div>
-                    ) : msg.content}
+                    )}
+
+                    <div
+                      className={`text-sm leading-relaxed whitespace-pre-wrap ${
+                        msg.role === 'user'
+                          ? 'bg-[#2f2f2f] text-white rounded-3xl px-5 py-3 max-w-[85%]'
+                          : 'text-neutral-200 w-full'
+                      }`}
+                    >
+                      {msg.role === 'assistant' ? (
+                        <div className="prose prose-invert prose-sm max-w-none">
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
+                      ) : msg.content}
+                    </div>
                   </div>
                 </div>
               )

@@ -10,7 +10,7 @@ export default function AppShell() {
   const [activeGraph, setActiveGraph] = useState<Graph | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [nodes, setNodes] = useState<Node[]>([])
-  const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
+  const [activeNode, setActiveNode] = useState<Node | null>(null)
   const [chatLoading, setChatLoading] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarKey, setSidebarKey] = useState(0)
@@ -24,15 +24,14 @@ export default function AppShell() {
     setActiveGraph(graph)
     setMessages([])
     setNodes([])
-    setActiveNodeId(null)
+    setActiveNode(null)
     try {
       const fetched = await fetchNodes(graph.id)
       setNodes(fetched)
-      // Load the most recently active node
       if (fetched.length > 0) {
         const active = fetched.find((n) => n.status === 'active') ?? fetched[fetched.length - 1]
         setMessages(active.materialized_context)
-        setActiveNodeId(active.id)
+        setActiveNode(active)
       }
     } catch {
       // silently fail — empty graph is fine
@@ -44,13 +43,49 @@ export default function AppShell() {
     setActiveGraph(res.data)
     setMessages([])
     setNodes([])
-    setActiveNodeId(null)
+    setActiveNode(null)
     setSidebarKey((k) => k + 1)
   }
 
   function handleSelectNode(node: Node) {
-    setActiveNodeId(node.id)
+    setActiveNode(node)
     setMessages(node.materialized_context)
+  }
+
+  async function handleBranch(messageIndex: number) {
+    if (!activeNode) return
+    try {
+      const res = await client.post<Node>(`/nodes/${activeNode.id}/branch/`, {
+        branch_from_index: messageIndex,
+      })
+      const newNode = res.data
+      // Add to local node list and switch to it
+      setNodes((prev) => [...prev, newNode])
+      setActiveNode(newNode)
+      setMessages(newNode.materialized_context)
+    } catch (e) {
+      console.error('Branch failed', e)
+    }
+  }
+
+  async function handleBranchFromNode(node: Node) {
+    // Branch from the tip of the node (last message index)
+    if (node.materialized_context.length === 0) return
+    const lastIndex = node.materialized_context.length - 1
+    // First switch to that node so context is correct
+    setActiveNode(node)
+    setMessages(node.materialized_context)
+    try {
+      const res = await client.post<Node>(`/nodes/${node.id}/branch/`, {
+        branch_from_index: lastIndex,
+      })
+      const newNode = res.data
+      setNodes((prev) => [...prev, newNode])
+      setActiveNode(newNode)
+      setMessages(newNode.materialized_context)
+    } catch (e) {
+      console.error('Branch from node failed', e)
+    }
   }
 
   async function handleSend(content: string, model: string) {
@@ -58,13 +93,13 @@ export default function AppShell() {
       const res = await client.post<Graph>('/graphs/', { name: 'New graph' })
       setActiveGraph(res.data)
       setSidebarKey((k) => k + 1)
-      sendMessage(res.data.id, content, model)
+      sendMessage(res.data.id, content, model, null)
       return
     }
-    sendMessage(activeGraph.id, content, model)
+    sendMessage(activeGraph.id, content, model, activeNode?.id ?? null)
   }
 
-  async function sendMessage(graphId: string, content: string, model: string) {
+  async function sendMessage(graphId: string, content: string, model: string, nodeId: string | null) {
     const userMessage: Message = { role: 'user', content }
     setMessages((prev) => [...prev, userMessage])
     setChatLoading(true)
@@ -74,13 +109,16 @@ export default function AppShell() {
 
     try {
       const token = localStorage.getItem('access_token')
+      const body: Record<string, string> = { message: content, model }
+      if (nodeId) body.node_id = nodeId
+
       const response = await fetch(`/api/graphs/${graphId}/chat/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: content, model }),
+        body: JSON.stringify(body),
       })
 
       const reader = response.body!.getReader()
@@ -123,12 +161,14 @@ export default function AppShell() {
                 setActiveGraph((prev) => prev ? { ...prev, name: data.graph_name } : prev)
                 setSidebarKey((k) => k + 1)
               }
-              // Refresh nodes so the graph panel updates
+              // Refresh nodes so graph panel updates
               try {
                 const fetched = await fetchNodes(graphId)
                 setNodes(fetched)
-                const active = fetched.find((n) => n.status === 'active') ?? fetched[fetched.length - 1]
-                if (active) setActiveNodeId(active.id)
+                if (data.node_id) {
+                  const updatedNode = fetched.find((n) => n.id === data.node_id)
+                  if (updatedNode) setActiveNode(updatedNode)
+                }
               } catch {
                 // non-critical
               }
@@ -188,7 +228,9 @@ export default function AppShell() {
             <ChatPanel
               activeGraph={activeGraph}
               messages={messages}
+              inheritedContextLength={activeNode?.inherited_context_length ?? 0}
               onSend={handleSend}
+              onBranch={handleBranch}
               loading={chatLoading}
             />
           </Panel>
@@ -198,9 +240,10 @@ export default function AppShell() {
           <Panel defaultSize={40} minSize={20}>
             <GraphPanel
               nodes={nodes}
-              activeNodeId={activeNodeId}
+              activeNodeId={activeNode?.id ?? null}
               loading={chatLoading}
               onSelectNode={handleSelectNode}
+              onBranchFromNode={handleBranchFromNode}
             />
           </Panel>
         </PanelGroup>
