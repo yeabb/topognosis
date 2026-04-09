@@ -1,9 +1,12 @@
 import json
+import logging
 import os
-import uuid
+import time
 import anthropic
 from django.http import StreamingHttpResponse
 from django.utils.text import slugify
+
+logger = logging.getLogger(__name__)
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -72,27 +75,48 @@ def chat(request, pk):
         graph.save()
 
     def stream():
-        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        anthropic_client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         full_response = ''
+        max_retries = 2
 
-        try:
-            with client.messages.stream(
-                model='claude-sonnet-4-6',
-                max_tokens=4096,
-                messages=node.materialized_context,
-            ) as stream:
-                for text in stream.text_stream:
-                    full_response += text
-                    yield f'data: {json.dumps({"text": text})}\n\n'
+        for attempt in range(max_retries + 1):
+            try:
+                with anthropic_client.messages.stream(
+                    model='claude-sonnet-4-6',
+                    max_tokens=4096,
+                    messages=node.materialized_context,
+                ) as anthropic_stream:
+                    for text in anthropic_stream.text_stream:
+                        full_response += text
+                        yield f'data: {json.dumps({"text": text})}\n\n'
 
-            # Save assistant response to node
-            node.materialized_context.append({'role': 'assistant', 'content': full_response})
-            node.save()
+                # Save assistant response to node
+                node.materialized_context.append({'role': 'assistant', 'content': full_response})
+                node.save()
 
-            yield f'data: {json.dumps({"done": True, "graph_name": graph.name})}\n\n'
+                yield f'data: {json.dumps({"done": True, "graph_name": graph.name})}\n\n'
+                return
 
-        except Exception as e:
-            yield f'data: {json.dumps({"error": str(e)})}\n\n'
+            except anthropic.APIStatusError as e:
+                if e.status_code == 529 and attempt < max_retries:
+                    # Overloaded — wait and retry
+                    logger.warning(f'Anthropic overloaded, retrying (attempt {attempt + 1})...')
+                    time.sleep(2 ** attempt)
+                    continue
+                logger.error(f'Anthropic API error: {e.status_code} — {e.message}')
+                user_message = 'Claude is currently overloaded. Please try again in a moment.' if e.status_code == 529 else 'The AI service returned an error. Please try again.'
+                yield f'data: {json.dumps({"error": user_message})}\n\n'
+                return
+
+            except anthropic.APIConnectionError:
+                logger.error('Anthropic connection error')
+                yield f'data: {json.dumps({"error": "Connection to AI service failed. Please check your internet and try again."})}\n\n'
+                return
+
+            except Exception as e:
+                logger.exception(f'Unexpected error in chat stream: {e}')
+                yield f'data: {json.dumps({"error": "An unexpected error occurred. Please try again."})}\n\n'
+                return
 
     response = StreamingHttpResponse(stream(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'
