@@ -2,15 +2,31 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Graph, Message } from '../types'
 
+interface Model {
+  id: string
+  label: string
+  available: boolean
+}
+
+const MODELS: Model[] = [
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku', available: true },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet', available: false },
+  { id: 'claude-opus-4-6', label: 'Claude Opus', available: false },
+  { id: 'gpt-4o', label: 'GPT-4o', available: false },
+  { id: 'gemini-2.0-flash', label: 'Gemini Flash', available: false },
+]
+
 interface Props {
   activeGraph: Graph | null
   messages: Message[]
-  onSend: (content: string) => void
+  onSend: (content: string, model: string) => void
   loading: boolean
 }
 
 export default function ChatPanel({ activeGraph, messages, onSend, loading }: Props) {
   const [input, setInput] = useState('')
+  const [selectedModel, setSelectedModel] = useState(MODELS[0])
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -22,7 +38,7 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
     e.preventDefault()
     const trimmed = input.trim()
     if (!trimmed || loading) return
-    onSend(trimmed)
+    onSend(trimmed, selectedModel.id)
     setInput('')
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -46,15 +62,50 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
   const isEmpty = messages.length === 0
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Model indicator */}
-      <div className="flex items-center justify-center py-3 border-b border-white/[0.06]">
-        <div className="flex items-center gap-1.5 text-neutral-400 text-sm cursor-pointer hover:text-neutral-200 transition">
-          <span>Claude</span>
+    <div className="flex flex-col h-full" onClick={() => setModelMenuOpen(false)}>
+      {/* Model selector */}
+      <div className="flex items-center justify-center border-b border-white/[0.06] relative" style={{ padding: '16px 0 12px' }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setModelMenuOpen((v) => !v) }}
+          className="flex items-center gap-1.5 text-neutral-400 text-sm hover:text-neutral-200 transition"
+        >
+          <span>{selectedModel.label}</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="6 9 12 15 18 9" />
           </svg>
-        </div>
+        </button>
+
+        {modelMenuOpen && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-full mt-1 z-20 w-52 rounded-xl border border-white/10 bg-[#1a1a1a] shadow-xl overflow-hidden"
+          >
+            {MODELS.map((model) => (
+              <button
+                key={model.id}
+                disabled={!model.available}
+                onClick={() => { setSelectedModel(model); setModelMenuOpen(false) }}
+                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition ${
+                  !model.available
+                    ? 'text-neutral-600 cursor-not-allowed'
+                    : selectedModel.id === model.id
+                    ? 'text-white bg-white/[0.08]'
+                    : 'text-neutral-300 hover:bg-white/[0.05]'
+                }`}
+              >
+                <span>{model.label}</span>
+                {!model.available && (
+                  <span className="text-xs text-neutral-700">soon</span>
+                )}
+                {model.available && selectedModel.id === model.id && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Messages */}
@@ -108,7 +159,7 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
         )}
       </div>
 
-      {/* Input — always full width of the panel */}
+      {/* Input */}
       <div className="border-t border-white/[0.06]" style={{ padding: '24px 80px 32px' }}>
         <form
           onSubmit={handleSubmit}
