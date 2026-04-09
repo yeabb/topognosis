@@ -13,9 +13,18 @@ export default function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarKey, setSidebarKey] = useState(0) // used to refresh sidebar graph list
 
-  function handleSelectGraph(graph: Graph) {
+  async function handleSelectGraph(graph: Graph) {
     setActiveGraph(graph)
     setMessages([])
+    try {
+      const res = await client.get<{ materialized_context: Message[] }[]>(`/nodes/?graph=${graph.id}`)
+      const nodes = res.data
+      if (nodes.length > 0) {
+        setMessages(nodes[0].materialized_context)
+      }
+    } catch {
+      // silently fail — empty chat is fine
+    }
   }
 
   async function handleNewGraph() {
@@ -77,7 +86,7 @@ export default function AppShell() {
             if (data.error) {
               setMessages((prev) => {
                 const updated = [...prev]
-                updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
+                updated[updated.length - 1] = { role: 'assistant', content: data.error }
                 return updated
               })
               break
@@ -101,10 +110,11 @@ export default function AppShell() {
           }
         }
       }
-    } catch {
+    } catch (e) {
+      console.error('Chat stream failed', e)
       setMessages((prev) => {
         const updated = [...prev]
-        updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
+        updated[updated.length - 1] = { role: 'assistant', content: 'Connection failed. Please check your internet and try again.' }
         return updated
       })
     } finally {
