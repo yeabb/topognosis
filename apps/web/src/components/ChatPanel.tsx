@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import type { Graph, Message } from '../types'
 
 interface Props {
@@ -68,33 +69,40 @@ export default function ChatPanel({ activeGraph, messages, onSend, loading }: Pr
             </p>
           </div>
         ) : (
-          <div className="w-full px-6 py-8 flex flex-col gap-6">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                {msg.role === 'assistant' && (
-                  <span className="text-neutral-600 text-xs px-1">Claude</span>
-                )}
-                <div
-                  className={`text-sm leading-relaxed whitespace-pre-wrap ${
-                    msg.role === 'user'
-                      ? 'bg-[#2f2f2f] text-white rounded-3xl px-5 py-3 max-w-[85%]'
-                      : 'text-neutral-200 w-full'
-                  }`}
-                >
-                  {msg.content}
+          <div className="w-full py-8 flex flex-col gap-6" style={{ paddingLeft: '80px', paddingRight: '80px' }}>
+            {messages.map((msg, i) => {
+              const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1
+              const isStreaming = isLastAssistant && loading
+              return (
+                <div key={i} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  {msg.role === 'assistant' && (
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-neutral-600 text-xs">Claude</span>
+                      {isStreaming && (
+                        <div className="flex gap-1">
+                          <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div
+                    className={`text-sm leading-relaxed whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'bg-[#2f2f2f] text-white rounded-3xl px-5 py-3 max-w-[85%]'
+                        : 'text-neutral-200 w-full'
+                    }`}
+                  >
+                    {msg.role === 'assistant' ? (
+                      <div className="prose prose-invert prose-sm max-w-none">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    ) : msg.content}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex flex-col gap-1 items-start">
-                <span className="text-neutral-600 text-xs px-1">Claude</span>
-                <div className="flex gap-1 px-1 py-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            )}
+              )
+            })}
             <div ref={bottomRef} />
           </div>
         )}

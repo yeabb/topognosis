@@ -58,38 +58,46 @@ export default function AppShell() {
 
       const reader = response.body!.getReader()
       const decoder = new TextDecoder()
+      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n').filter((l) => l.startsWith('data: '))
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() ?? ''
 
         for (const line of lines) {
-          const data = JSON.parse(line.slice(6))
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
 
-          if (data.error) {
-            setMessages((prev) => {
-              const updated = [...prev]
-              updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
-              return updated
-            })
-            break
-          }
+            if (data.error) {
+              setMessages((prev) => {
+                const updated = [...prev]
+                updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
+                return updated
+              })
+              break
+            }
 
-          if (data.text) {
-            assistantContent += data.text
-            setMessages((prev) => {
-              const updated = [...prev]
-              updated[updated.length - 1] = { role: 'assistant', content: assistantContent }
-              return updated
-            })
-          }
+            if (data.text) {
+              assistantContent += data.text
+              setMessages((prev) => {
+                const updated = [...prev]
+                updated[updated.length - 1] = { role: 'assistant', content: assistantContent }
+                return updated
+              })
+            }
 
-          if (data.done && data.graph_name) {
-            setActiveGraph((prev) => prev ? { ...prev, name: data.graph_name } : prev)
-            setSidebarKey((k) => k + 1)
+            if (data.done && data.graph_name) {
+              setActiveGraph((prev) => prev ? { ...prev, name: data.graph_name } : prev)
+              setSidebarKey((k) => k + 1)
+            }
+          } catch {
+            // Incomplete JSON chunk — skip
           }
         }
       }
