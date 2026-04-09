@@ -4,26 +4,38 @@ import Sidebar from '../components/Sidebar'
 import ChatPanel from '../components/ChatPanel'
 import GraphPanel from '../components/GraphPanel'
 import client from '../api/client'
-import type { Graph, Message } from '../types'
+import type { Graph, Message, Node } from '../types/index'
 
 export default function AppShell() {
   const [activeGraph, setActiveGraph] = useState<Graph | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [nodes, setNodes] = useState<Node[]>([])
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
   const [chatLoading, setChatLoading] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [sidebarKey, setSidebarKey] = useState(0) // used to refresh sidebar graph list
+  const [sidebarKey, setSidebarKey] = useState(0)
+
+  async function fetchNodes(graphId: string): Promise<Node[]> {
+    const res = await client.get<Node[]>(`/nodes/?graph=${graphId}`)
+    return res.data
+  }
 
   async function handleSelectGraph(graph: Graph) {
     setActiveGraph(graph)
     setMessages([])
+    setNodes([])
+    setActiveNodeId(null)
     try {
-      const res = await client.get<{ materialized_context: Message[] }[]>(`/nodes/?graph=${graph.id}`)
-      const nodes = res.data
-      if (nodes.length > 0) {
-        setMessages(nodes[0].materialized_context)
+      const fetched = await fetchNodes(graph.id)
+      setNodes(fetched)
+      // Load the most recently active node
+      if (fetched.length > 0) {
+        const active = fetched.find((n) => n.status === 'active') ?? fetched[fetched.length - 1]
+        setMessages(active.materialized_context)
+        setActiveNodeId(active.id)
       }
     } catch {
-      // silently fail — empty chat is fine
+      // silently fail — empty graph is fine
     }
   }
 
@@ -31,12 +43,18 @@ export default function AppShell() {
     const res = await client.post<Graph>('/graphs/', { name: 'New graph' })
     setActiveGraph(res.data)
     setMessages([])
+    setNodes([])
+    setActiveNodeId(null)
     setSidebarKey((k) => k + 1)
+  }
+
+  function handleSelectNode(node: Node) {
+    setActiveNodeId(node.id)
+    setMessages(node.materialized_context)
   }
 
   async function handleSend(content: string, model: string) {
     if (!activeGraph) {
-      // Auto-create a graph if none is active
       const res = await client.post<Graph>('/graphs/', { name: 'New graph' })
       setActiveGraph(res.data)
       setSidebarKey((k) => k + 1)
@@ -75,7 +93,6 @@ export default function AppShell() {
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
-        // Keep the last incomplete line in the buffer
         buffer = lines.pop() ?? ''
 
         for (const line of lines) {
@@ -101,9 +118,20 @@ export default function AppShell() {
               })
             }
 
-            if (data.done && data.graph_name) {
-              setActiveGraph((prev) => prev ? { ...prev, name: data.graph_name } : prev)
-              setSidebarKey((k) => k + 1)
+            if (data.done) {
+              if (data.graph_name) {
+                setActiveGraph((prev) => prev ? { ...prev, name: data.graph_name } : prev)
+                setSidebarKey((k) => k + 1)
+              }
+              // Refresh nodes so the graph panel updates
+              try {
+                const fetched = await fetchNodes(graphId)
+                setNodes(fetched)
+                const active = fetched.find((n) => n.status === 'active') ?? fetched[fetched.length - 1]
+                if (active) setActiveNodeId(active.id)
+              } catch {
+                // non-critical
+              }
             }
           } catch {
             // Incomplete JSON chunk — skip
@@ -168,7 +196,12 @@ export default function AppShell() {
           <PanelResizeHandle className="w-[1px] bg-white/[0.08] hover:bg-indigo-500/60 hover:w-[2px] transition-all cursor-col-resize" />
 
           <Panel defaultSize={40} minSize={20}>
-            <GraphPanel />
+            <GraphPanel
+              nodes={nodes}
+              activeNodeId={activeNodeId}
+              loading={chatLoading}
+              onSelectNode={handleSelectNode}
+            />
           </Panel>
         </PanelGroup>
       </div>
