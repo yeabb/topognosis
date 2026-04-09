@@ -1,18 +1,21 @@
 import json
 import logging
 import os
-import time
-import anthropic
+
 from django.http import StreamingHttpResponse
 from django.utils.text import slugify
-
-logger = logging.getLogger(__name__)
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+
+from nodes.models import Node
+from llm.router import get_adapter, get_error_message
 from .models import Graph
 from .serializers import GraphSerializer
-from nodes.models import Node
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_MODEL = os.getenv('LLM_MODEL', 'claude-haiku-4-5-20251001')
 
 
 class GraphListCreateView(generics.ListCreateAPIView):
@@ -26,7 +29,6 @@ class GraphListCreateView(generics.ListCreateAPIView):
         name = serializer.validated_data.get('name', 'New graph')
         base_slug = slugify(name) or 'graph'
         slug = base_slug
-        # Ensure slug is unique per owner
         counter = 1
         while Graph.objects.filter(owner=self.request.user, slug=slug).exists():
             slug = f'{base_slug}-{counter}'
@@ -54,13 +56,15 @@ def chat(request, pk):
     if not message:
         return Response({'detail': 'Message is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    model = request.data.get('model', DEFAULT_MODEL)
+
     # Get or create the active node for this graph
     node = Node.objects.filter(graph=graph, status='active').order_by('-created_at').first()
     if not node:
         node = Node.objects.create(
             graph=graph,
             label=message[:80],
-            model='claude-sonnet-4-6',
+            model=model,
             tool='web',
         )
 
@@ -75,48 +79,22 @@ def chat(request, pk):
         graph.save()
 
     def stream():
-        anthropic_client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         full_response = ''
-        max_retries = 2
+        try:
+            adapter = get_adapter(model)
+            for text in adapter.stream(node.materialized_context):
+                full_response += text
+                yield f'data: {json.dumps({"text": text})}\n\n'
 
-        for attempt in range(max_retries + 1):
-            try:
-                with anthropic_client.messages.stream(
-                    model='claude-sonnet-4-6',
-                    max_tokens=4096,
-                    messages=node.materialized_context,
-                ) as anthropic_stream:
-                    for text in anthropic_stream.text_stream:
-                        full_response += text
-                        yield f'data: {json.dumps({"text": text})}\n\n'
+            # Save assistant response to node
+            node.materialized_context.append({'role': 'assistant', 'content': full_response})
+            node.save()
 
-                # Save assistant response to node
-                node.materialized_context.append({'role': 'assistant', 'content': full_response})
-                node.save()
+            yield f'data: {json.dumps({"done": True, "graph_name": graph.name})}\n\n'
 
-                yield f'data: {json.dumps({"done": True, "graph_name": graph.name})}\n\n'
-                return
-
-            except anthropic.APIStatusError as e:
-                if e.status_code == 529 and attempt < max_retries:
-                    # Overloaded — wait and retry
-                    logger.warning(f'Anthropic overloaded, retrying (attempt {attempt + 1})...')
-                    time.sleep(2 ** attempt)
-                    continue
-                logger.error(f'Anthropic API error: {e.status_code} — {e.message}')
-                user_message = 'Claude is currently overloaded. Please try again in a moment.' if e.status_code == 529 else 'The AI service returned an error. Please try again.'
-                yield f'data: {json.dumps({"error": user_message})}\n\n'
-                return
-
-            except anthropic.APIConnectionError:
-                logger.error('Anthropic connection error')
-                yield f'data: {json.dumps({"error": "Connection to AI service failed. Please check your internet and try again."})}\n\n'
-                return
-
-            except Exception as e:
-                logger.exception(f'Unexpected error in chat stream: {e}')
-                yield f'data: {json.dumps({"error": "An unexpected error occurred. Please try again."})}\n\n'
-                return
+        except Exception as e:
+            logger.exception(f'Chat stream error for graph {graph.id}: {e}')
+            yield f'data: {json.dumps({"error": get_error_message(e)})}\n\n'
 
     response = StreamingHttpResponse(stream(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'
