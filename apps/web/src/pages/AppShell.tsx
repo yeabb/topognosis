@@ -20,7 +20,24 @@ export default function AppShell() {
     return res.data
   }
 
+  // Silently delete a branch node that was never interacted with
+  async function cleanupAbandonedNode(node: Node | null) {
+    if (!node) return
+    const isAbandoned =
+      node.inherited_context_length > 0 &&
+      node.materialized_context.length === node.inherited_context_length
+    if (isAbandoned) {
+      try {
+        await client.delete(`/nodes/${node.id}/`)
+        setNodes((prev) => prev.filter((n) => n.id !== node.id))
+      } catch {
+        // non-critical
+      }
+    }
+  }
+
   async function handleSelectGraph(graph: Graph) {
+    await cleanupAbandonedNode(activeNode)
     setActiveGraph(graph)
     setMessages([])
     setNodes([])
@@ -47,7 +64,10 @@ export default function AppShell() {
     setSidebarKey((k) => k + 1)
   }
 
-  function handleSelectNode(node: Node) {
+  async function handleSelectNode(node: Node) {
+    if (activeNode?.id !== node.id) {
+      await cleanupAbandonedNode(activeNode)
+    }
     setActiveNode(node)
     setMessages(node.materialized_context)
   }

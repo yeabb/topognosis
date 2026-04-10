@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -49,6 +49,7 @@ interface NodeData {
 
 function ConversationNode({ data }: NodeProps) {
   const d = data as NodeData
+  const [branchHovered, setBranchHovered] = useState(false)
 
   const modelLabel = d.model.includes('haiku')
     ? 'Haiku'
@@ -59,8 +60,10 @@ function ConversationNode({ data }: NodeProps) {
     : d.model
 
   return (
-    <>
+    <div style={{ position: 'relative', width: NODE_WIDTH, overflow: 'visible' }}>
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+
+      {/* Card */}
       <div
         onClick={d.onClick}
         style={{
@@ -76,7 +79,6 @@ function ConversationNode({ data }: NodeProps) {
           justifyContent: 'space-between',
           cursor: 'pointer',
           transition: 'all 0.15s ease',
-          position: 'relative',
         }}
       >
         {/* Branch origin snippet */}
@@ -106,7 +108,7 @@ function ConversationNode({ data }: NodeProps) {
           lineHeight: '1.4',
           flex: 1,
         }}>
-          {d.label || 'Untitled'}
+          {d.label || (d.isBranch ? 'New branch…' : 'Untitled')}
         </div>
 
         {/* Footer */}
@@ -137,39 +139,66 @@ function ConversationNode({ data }: NodeProps) {
               {d.messageCount} msg{d.messageCount !== 1 ? 's' : ''}
             </span>
 
-            {/* Branch button — tip of node */}
-            <button
-              onClick={(e) => { e.stopPropagation(); d.onBranch() }}
-              title="Branch from tip of this node"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 18,
-                height: 18,
-                borderRadius: 4,
-                border: '1px solid rgba(99,102,241,0.25)',
-                background: 'transparent',
-                color: '#6366f1',
-                cursor: 'pointer',
-                padding: 0,
-                opacity: 0.6,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
-            >
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="6" y1="3" x2="6" y2="15" />
-                <circle cx="18" cy="6" r="3" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M18 9a9 9 0 0 1-9 9" />
-              </svg>
-            </button>
           </div>
         </div>
       </div>
+
+      {/* Branch button — straddles the bottom-right corner, half in half out */}
+      <button
+        onClick={(e) => { e.stopPropagation(); d.onBranch() }}
+        onMouseEnter={() => setBranchHovered(true)}
+        onMouseLeave={() => setBranchHovered(false)}
+        style={{
+          position: 'absolute',
+          bottom: -18,
+          right: -18,
+          width: 24,
+          height: 24,
+          borderRadius: '50%',
+          border: '1.5px solid rgba(99,102,241,0.6)',
+          background: branchHovered ? '#6366f1' : '#1a1f2e',
+          color: '#818cf8',
+          cursor: 'pointer',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10,
+          transition: 'all 0.15s ease',
+          boxShadow: branchHovered
+            ? '0 0 0 2px #0a0a0a, 0 0 8px rgba(99,102,241,0.4)'
+            : '0 0 0 2px #0a0a0a',
+        }}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="6" y1="3" x2="6" y2="15" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M18 9a9 9 0 0 1-9 9" />
+        </svg>
+        {/* Inline tooltip */}
+        {branchHovered && (
+          <div style={{
+            position: 'absolute',
+            bottom: '100%',
+            right: 0,
+            marginBottom: 6,
+            background: '#1e1e1e',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#d4d4d4',
+            fontSize: 11,
+            padding: '3px 8px',
+            borderRadius: 6,
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}>
+            Branch from here
+          </div>
+        )}
+      </button>
+
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
-    </>
+    </div>
   )
 }
 

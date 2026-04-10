@@ -19,7 +19,7 @@ class NodeListCreateView(generics.ListCreateAPIView):
         return Node.objects.filter(graph__owner=self.request.user, graph_id=graph_id)
 
 
-class NodeDetailView(generics.RetrieveUpdateAPIView):
+class NodeDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_queryset(self):
@@ -75,13 +75,9 @@ def branch_node(request, pk):
 
     sliced_context = context[:branch_from_index + 1]
 
-    # Derive label from the message being branched from
-    branch_msg = context[branch_from_index]
-    branch_label = (branch_msg.get('content', '') or '')[:80]
-
     child = Node.objects.create(
         graph=parent.graph,
-        label=branch_label,
+        label='',  # set from first user message when they send it
         model=parent.model,
         tool=parent.tool,
         status='active',

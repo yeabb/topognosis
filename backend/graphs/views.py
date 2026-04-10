@@ -80,6 +80,13 @@ def chat(request, pk):
 
     # Append user message to materialized context
     node.materialized_context.append({'role': 'user', 'content': message})
+
+    # Label the node from the first user message sent in it.
+    # For root nodes: always the first message.
+    # For branch nodes: first message *after* the inherited context.
+    if len(node.materialized_context) == node.inherited_context_length + 1:
+        node.label = message[:80]
+
     node.save()
 
     # Auto-name the graph from the first message if still default
