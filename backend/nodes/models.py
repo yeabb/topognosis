@@ -21,6 +21,9 @@ class Node(models.Model):
 
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
 
+    # Number of messages inherited from parent node at branch time (0 for root nodes)
+    inherited_context_length = models.IntegerField(default=0)
+
     # Full materialized conversation context up to this node
     materialized_context = models.JSONField(default=list)
 

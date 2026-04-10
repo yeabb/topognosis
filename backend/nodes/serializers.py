@@ -18,6 +18,7 @@ class NodeSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'graph', 'parents', 'children',
             'label', 'summary', 'status',
+            'inherited_context_length',
             'materialized_context', 'compressed_context', 'delta_events',
             'git_hash', 'model', 'tool',
             'created_at', 'updated_at',

@@ -58,18 +58,35 @@ def chat(request, pk):
 
     model = request.data.get('model', DEFAULT_MODEL)
 
-    # Get or create the active node for this graph
-    node = Node.objects.filter(graph=graph, status='active').order_by('-created_at').first()
-    if not node:
-        node = Node.objects.create(
-            graph=graph,
-            label=message[:80],
-            model=model,
-            tool='web',
-        )
+    # If a specific node_id is provided (e.g. after branching), use that node.
+    # Otherwise fall back to finding/creating the active node for this graph.
+    node_id = request.data.get('node_id')
+    node = None
+
+    if node_id:
+        try:
+            node = Node.objects.get(pk=node_id, graph=graph)
+        except Node.DoesNotExist:
+            return Response({'detail': 'Node not found.'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        node = Node.objects.filter(graph=graph, status='active').order_by('-created_at').first()
+        if not node:
+            node = Node.objects.create(
+                graph=graph,
+                label=message[:80],
+                model=model,
+                tool='web',
+            )
 
     # Append user message to materialized context
     node.materialized_context.append({'role': 'user', 'content': message})
+
+    # Label the node from the first user message sent in it.
+    # For root nodes: always the first message.
+    # For branch nodes: first message *after* the inherited context.
+    if len(node.materialized_context) == node.inherited_context_length + 1:
+        node.label = message[:80]
+
     node.save()
 
     # Auto-name the graph from the first message if still default
@@ -86,11 +103,10 @@ def chat(request, pk):
                 full_response += text
                 yield f'data: {json.dumps({"text": text})}\n\n'
 
-            # Save assistant response to node
             node.materialized_context.append({'role': 'assistant', 'content': full_response})
             node.save()
 
-            yield f'data: {json.dumps({"done": True, "graph_name": graph.name})}\n\n'
+            yield f'data: {json.dumps({"done": True, "node_id": str(node.id), "graph_name": graph.name})}\n\n'
 
         except Exception as e:
             logger.exception(f'Chat stream error for graph {graph.id}: {e}')

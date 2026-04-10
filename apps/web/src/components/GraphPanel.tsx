@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -15,9 +15,8 @@ import dagre from 'dagre'
 import '@xyflow/react/dist/style.css'
 import type { Node } from '../types/index'
 
-// Layout constants
-const NODE_WIDTH = 200
-const NODE_HEIGHT = 72
+const NODE_WIDTH = 210
+const NODE_HEIGHT = 88
 
 function layoutGraph(nodes: FlowNode[], edges: Edge[]): FlowNode[] {
   const g = new dagre.graphlib.Graph()
@@ -35,39 +34,68 @@ function layoutGraph(nodes: FlowNode[], edges: Edge[]): FlowNode[] {
   })
 }
 
-// Custom node card
 interface NodeData {
   label: string
   model: string
   messageCount: number
   isActive: boolean
   isStreaming: boolean
+  isBranch: boolean
+  branchOriginSnippet: string
   onClick: () => void
+  onBranch: () => void
   [key: string]: unknown
 }
 
 function ConversationNode({ data }: NodeProps) {
   const d = data as NodeData
+  const [branchHovered, setBranchHovered] = useState(false)
+
+  const modelLabel = d.model.includes('haiku')
+    ? 'Haiku'
+    : d.model.includes('sonnet')
+    ? 'Sonnet'
+    : d.model.includes('opus')
+    ? 'Opus'
+    : d.model
+
   return (
-    <>
+    <div style={{ position: 'relative', width: NODE_WIDTH, overflow: 'visible' }}>
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+
+      {/* Card */}
       <div
         onClick={d.onClick}
-        className="cursor-pointer select-none"
         style={{
           width: NODE_WIDTH,
           height: NODE_HEIGHT,
           borderRadius: 12,
-          padding: '10px 14px',
+          padding: '10px 12px 8px',
           background: d.isActive ? '#1a1f2e' : '#141414',
           border: d.isActive ? '1.5px solid #6366f1' : '1px solid rgba(255,255,255,0.07)',
           boxShadow: d.isActive ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
+          cursor: 'pointer',
           transition: 'all 0.15s ease',
         }}
       >
+        {/* Branch origin snippet */}
+        {d.isBranch && d.branchOriginSnippet && (
+          <div style={{
+            fontSize: 9,
+            color: '#6366f1',
+            marginBottom: 4,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+            opacity: 0.8,
+          }}>
+            ↳ {d.branchOriginSnippet}
+          </div>
+        )}
+
         {/* Label */}
         <div style={{
           fontSize: 12,
@@ -75,11 +103,12 @@ function ConversationNode({ data }: NodeProps) {
           color: d.isActive ? '#e2e8f0' : '#9ca3af',
           overflow: 'hidden',
           display: '-webkit-box',
-          WebkitLineClamp: 2,
+          WebkitLineClamp: d.isBranch ? 1 : 2,
           WebkitBoxOrient: 'vertical',
           lineHeight: '1.4',
+          flex: 1,
         }}>
-          {d.label}
+          {d.label || (d.isBranch ? 'New branch…' : 'Untitled')}
         </div>
 
         {/* Footer */}
@@ -91,10 +120,10 @@ function ConversationNode({ data }: NodeProps) {
             borderRadius: 4,
             padding: '1px 5px',
           }}>
-            {d.model.includes('haiku') ? 'Haiku' : d.model.includes('sonnet') ? 'Sonnet' : d.model.includes('opus') ? 'Opus' : d.model}
+            {modelLabel}
           </span>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {d.isStreaming && (
               <div style={{ display: 'flex', gap: 3 }}>
                 {[0, 150, 300].map((delay) => (
@@ -109,11 +138,67 @@ function ConversationNode({ data }: NodeProps) {
             <span style={{ fontSize: 10, color: '#4b5563' }}>
               {d.messageCount} msg{d.messageCount !== 1 ? 's' : ''}
             </span>
+
           </div>
         </div>
       </div>
+
+      {/* Branch button — straddles the bottom-right corner, half in half out */}
+      <button
+        onClick={(e) => { e.stopPropagation(); d.onBranch() }}
+        onMouseEnter={() => setBranchHovered(true)}
+        onMouseLeave={() => setBranchHovered(false)}
+        style={{
+          position: 'absolute',
+          bottom: -18,
+          right: -18,
+          width: 24,
+          height: 24,
+          borderRadius: '50%',
+          border: '1.5px solid rgba(99,102,241,0.6)',
+          background: branchHovered ? '#6366f1' : '#1a1f2e',
+          color: '#818cf8',
+          cursor: 'pointer',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10,
+          transition: 'all 0.15s ease',
+          boxShadow: branchHovered
+            ? '0 0 0 2px #0a0a0a, 0 0 8px rgba(99,102,241,0.4)'
+            : '0 0 0 2px #0a0a0a',
+        }}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="6" y1="3" x2="6" y2="15" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M18 9a9 9 0 0 1-9 9" />
+        </svg>
+        {/* Inline tooltip */}
+        {branchHovered && (
+          <div style={{
+            position: 'absolute',
+            bottom: '100%',
+            right: 0,
+            marginBottom: 6,
+            background: '#1e1e1e',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#d4d4d4',
+            fontSize: 11,
+            padding: '3px 8px',
+            borderRadius: 6,
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}>
+            Branch from here
+          </div>
+        )}
+      </button>
+
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
-    </>
+    </div>
   )
 }
 
@@ -124,9 +209,10 @@ interface Props {
   activeNodeId: string | null
   loading: boolean
   onSelectNode: (node: Node) => void
+  onBranchFromNode: (node: Node) => void
 }
 
-export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode }: Props) {
+export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode, onBranchFromNode }: Props) {
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState([])
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState([])
 
@@ -137,19 +223,30 @@ export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode 
       return
     }
 
-    const raw: FlowNode[] = nodes.map((n) => ({
-      id: n.id,
-      type: 'conversation',
-      position: { x: 0, y: 0 }, // dagre will override
-      data: {
-        label: n.label || 'Untitled',
-        model: n.model,
-        messageCount: n.materialized_context.length,
-        isActive: n.id === activeNodeId,
-        isStreaming: n.id === activeNodeId && loading,
-        onClick: () => onSelectNode(n),
-      },
-    }))
+    const raw: FlowNode[] = nodes.map((n) => {
+      const isBranch = (n.parents ?? []).length > 0
+      // Snippet from the last message in the inherited context (the branch point)
+      const branchOriginSnippet = isBranch && n.materialized_context.length > 0
+        ? (n.materialized_context[n.inherited_context_length - 1]?.content ?? '').slice(0, 40)
+        : ''
+
+      return {
+        id: n.id,
+        type: 'conversation',
+        position: { x: 0, y: 0 },
+        data: {
+          label: n.label || 'Untitled',
+          model: n.model,
+          messageCount: n.materialized_context.length,
+          isActive: n.id === activeNodeId,
+          isStreaming: n.id === activeNodeId && loading,
+          isBranch,
+          branchOriginSnippet,
+          onClick: () => onSelectNode(n),
+          onBranch: () => onBranchFromNode(n),
+        },
+      }
+    })
 
     const edges: Edge[] = nodes.flatMap((n) =>
       (n.parents ?? []).map((parentId) => ({
@@ -169,7 +266,7 @@ export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode 
     const laid = layoutGraph(raw, edges)
     setFlowNodes(laid)
     setFlowEdges(edges)
-  }, [nodes, activeNodeId, loading, onSelectNode, setFlowNodes, setFlowEdges])
+  }, [nodes, activeNodeId, loading, onSelectNode, onBranchFromNode, setFlowNodes, setFlowEdges])
 
   useEffect(() => {
     buildGraph()

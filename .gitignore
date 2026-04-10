@@ -18,6 +18,7 @@ node_modules/
 dist/
 .env
 .env.local
+.vite/
 
 # OS
 .DS_Store

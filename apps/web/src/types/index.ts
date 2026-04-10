@@ -32,6 +32,7 @@ export interface Node {
   label: string
   summary: string
   status: NodeStatus
+  inherited_context_length: number
   materialized_context: Message[]
   compressed_context: Message[]
   delta_events: object[]
