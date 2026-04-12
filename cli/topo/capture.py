@@ -190,7 +190,7 @@ class EventCapture:
 
         # 2. Send to backend — best effort, never crash the session on failure
         try:
-            self._backend.append_delta_event(self._node_id, event)
+            await self._backend.append_delta_event(self._node_id, event)
         except Exception as exc:
             logger.warning("Failed to send event to backend: %s", exc)
 

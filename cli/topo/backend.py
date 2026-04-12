@@ -20,9 +20,15 @@ class BackendError(Exception):
 class BackendClient:
     def __init__(self, base_url: str = DEFAULT_BASE_URL) -> None:
         self.base_url = base_url.rstrip("/")
+        # Shared async client — created once, reused across all session requests.
+        # Call aclose() when the session ends.
+        self._client = httpx.AsyncClient(timeout=15)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     # ------------------------------------------------------------------
-    # Auth
+    # Auth — sync, called from CLI login command (not inside async session)
     # ------------------------------------------------------------------
 
     def login(self, email: str, password: str) -> dict[str, str]:
@@ -37,15 +43,14 @@ class BackendClient:
         _raise_for_status(resp)
         return resp.json()
 
-    def refresh_access_token(self) -> str:
-        """Use the stored refresh token to get a new access token. Returns new access token."""
+    async def _refresh_access_token(self) -> str:
+        """Use the stored refresh token to get a new access token."""
         refresh = get_refresh_token()
         if not refresh:
-            raise BackendError(401, "No refresh token stored. Please log in again.")
-        resp = httpx.post(
+            raise BackendError(401, "No refresh token stored. Please run `topo login` again.")
+        resp = await self._client.post(
             f"{self.base_url}/api/auth/token/refresh/",
             json={"refresh": refresh},
-            timeout=15,
         )
         _raise_for_status(resp)
         data = resp.json()
@@ -57,50 +62,49 @@ class BackendClient:
     # Graphs
     # ------------------------------------------------------------------
 
-    def create_graph(self, name: str, project_path: str) -> dict[str, Any]:
-        return self._post("/api/graphs/", {"name": name, "project_path": project_path})
+    async def create_graph(self, name: str, project_path: str) -> dict[str, Any]:
+        return await self._post("/api/graphs/", {"name": name, "project_path": project_path})
 
-    def get_graph(self, graph_id: str) -> dict[str, Any]:
-        return self._get(f"/api/graphs/{graph_id}/")
+    async def get_graph(self, graph_id: str) -> dict[str, Any]:
+        return await self._get(f"/api/graphs/{graph_id}/")
 
     # ------------------------------------------------------------------
     # Nodes
     # ------------------------------------------------------------------
 
-    def create_node(self, graph_id: str, parent_id: str | None = None) -> dict[str, Any]:
+    async def create_node(self, graph_id: str, parent_id: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {"graph": graph_id}
         if parent_id:
             payload["parent"] = parent_id
-        return self._post("/api/nodes/", payload)
+        return await self._post("/api/nodes/", payload)
 
-    def patch_node(self, node_id: str, data: dict[str, Any]) -> dict[str, Any]:
-        return self._patch(f"/api/nodes/{node_id}/", data)
+    async def patch_node(self, node_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        return await self._patch(f"/api/nodes/{node_id}/", data)
 
-    def append_delta_event(self, node_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        return self._post(f"/api/nodes/{node_id}/events/", event)
+    async def append_delta_event(self, node_id: str, event: dict[str, Any]) -> dict[str, Any]:
+        return await self._post(f"/api/nodes/{node_id}/events/", event)
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get(self, path: str) -> dict[str, Any]:
-        return self._request("GET", path)
+    async def _get(self, path: str) -> dict[str, Any]:
+        return await self._request("GET", path)
 
-    def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self._request("POST", path, json=body)
+    async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", path, json=body)
 
-    def _patch(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self._request("PATCH", path, json=body)
+    async def _patch(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        return await self._request("PATCH", path, json=body)
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         token = get_access_token()
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         try:
-            resp = httpx.request(
+            resp = await self._client.request(
                 method,
                 f"{self.base_url}{path}",
                 headers=headers,
-                timeout=15,
                 **kwargs,
             )
         except httpx.ConnectError as exc:
@@ -109,16 +113,14 @@ class BackendClient:
             raise BackendError(0, "Request timed out.") from exc
 
         if resp.status_code == 401:
-            # Try token refresh once
             logger.debug("Access token expired, attempting refresh")
             try:
-                new_token = self.refresh_access_token()
+                new_token = await self._refresh_access_token()
                 headers["Authorization"] = f"Bearer {new_token}"
-                resp = httpx.request(
+                resp = await self._client.request(
                     method,
                     f"{self.base_url}{path}",
                     headers=headers,
-                    timeout=15,
                     **kwargs,
                 )
             except BackendError:

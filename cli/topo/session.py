@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import uuid
 from pathlib import Path
 
@@ -54,13 +53,14 @@ async def _run(driver_name: str, cwd: str) -> None:
     # Register graph + first node with backend
     # ----------------------------------------------------------------
     try:
-        graph = backend.create_graph(name=project_name, project_path=cwd)
+        graph = await backend.create_graph(name=project_name, project_path=cwd)
         graph_id = graph["id"]
-        node = backend.create_node(graph_id=graph_id)
+        node = await backend.create_node(graph_id=graph_id)
         node_id = node["id"]
     except BackendError as exc:
         console.print(f"[red]Could not connect to Topognosis backend: {exc.detail}[/red]")
         console.print("[dim]Start the backend or check your connection, then try again.[/dim]")
+        await backend.aclose()
         return
 
     # ----------------------------------------------------------------
@@ -123,6 +123,7 @@ async def _run(driver_name: str, cwd: str) -> None:
     finally:
         await driver.disconnect()
         capture.close()
+        await backend.aclose()
         console.print(Rule("[dim]Session ended[/dim]"))
 
 
