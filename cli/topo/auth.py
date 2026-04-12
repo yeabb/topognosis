@@ -5,7 +5,7 @@ from pathlib import Path
 import httpx
 
 CONFIG_PATH = Path.home() / ".topo" / "config.json"
-DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_BASE_URL = os.getenv("TOPO_BASE_URL", "http://localhost:8000")
 
 
 def is_authenticated() -> bool:

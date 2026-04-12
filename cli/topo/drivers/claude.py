@@ -89,9 +89,9 @@ class ClaudeDriver(BaseDriver):
             ctx: HookContext,
         ) -> None:
             payload = ToolHookPayload(
-                tool_name=hook_input.get("tool_name", ""),
-                tool_input=hook_input.get("tool_input", {}),
-                tool_use_id=hook_input.get("tool_use_id", ""),
+                tool_name=hook_input.tool_name,
+                tool_input=hook_input.tool_input,
+                tool_use_id=hook_input.tool_use_id,
                 session_id=session_id,
             )
             for cb in self._pre_tool_hooks:
@@ -104,12 +104,12 @@ class ClaudeDriver(BaseDriver):
             ctx: HookContext,
         ) -> None:
             payload = ToolHookPayload(
-                tool_name=hook_input.get("tool_name", ""),
-                tool_input=hook_input.get("tool_input", {}),
-                tool_use_id=hook_input.get("tool_use_id", ""),
+                tool_name=hook_input.tool_name,
+                tool_input=hook_input.tool_input,
+                tool_use_id=hook_input.tool_use_id,
                 session_id=session_id,
-                tool_output=hook_input.get("tool_response"),
-                is_error=hook_input.get("tool_response_error") is not None,
+                tool_output=hook_input.tool_response,
+                is_error=False,  # PostToolUseHookInput has no error field — errors surface in tool_response content
             )
             for cb in self._post_tool_hooks:
                 await cb(payload)
@@ -126,27 +126,27 @@ def _normalize(msg: Any) -> list[DriverEvent]:
     events: list[DriverEvent] = []
 
     if isinstance(msg, AssistantMessage):
-        for block in msg.get("content", []):
+        for block in msg.content:
             if isinstance(block, TextBlock):
                 events.append(DriverEvent(
                     type="text",
-                    data={"text": block["text"], "session_id": msg.get("session_id")},
+                    data={"text": block.text, "session_id": msg.session_id},
                     raw=msg,
                 ))
             elif isinstance(block, ThinkingBlock):
                 events.append(DriverEvent(
                     type="thinking",
-                    data={"thinking": block.get("thinking", ""), "session_id": msg.get("session_id")},
+                    data={"thinking": block.thinking, "session_id": msg.session_id},
                     raw=msg,
                 ))
             elif isinstance(block, ToolUseBlock):
                 events.append(DriverEvent(
                     type="tool_use",
                     data={
-                        "tool_name": block["name"],
-                        "tool_input": block["input"],
-                        "tool_use_id": block["id"],
-                        "session_id": msg.get("session_id"),
+                        "tool_name": block.name,
+                        "tool_input": block.input,
+                        "tool_use_id": block.id,
+                        "session_id": msg.session_id,
                     },
                     raw=msg,
                 ))
@@ -154,9 +154,9 @@ def _normalize(msg: Any) -> list[DriverEvent]:
                 events.append(DriverEvent(
                     type="tool_result",
                     data={
-                        "tool_use_id": block.get("tool_use_id"),
-                        "content": block.get("content"),
-                        "session_id": msg.get("session_id"),
+                        "tool_use_id": block.tool_use_id,
+                        "content": block.content,
+                        "session_id": msg.session_id,
                     },
                     raw=msg,
                 ))
@@ -165,11 +165,11 @@ def _normalize(msg: Any) -> list[DriverEvent]:
         events.append(DriverEvent(
             type="result",
             data={
-                "cost_usd": msg.get("total_cost_usd"),
-                "num_turns": msg.get("num_turns"),
-                "stop_reason": msg.get("stop_reason"),
-                "is_error": msg.get("is_error", False),
-                "session_id": msg.get("session_id"),
+                "cost_usd": msg.total_cost_usd,
+                "num_turns": msg.num_turns,
+                "stop_reason": msg.stop_reason,
+                "is_error": msg.is_error,
+                "session_id": msg.session_id,
             },
             raw=msg,
         ))
@@ -177,7 +177,7 @@ def _normalize(msg: Any) -> list[DriverEvent]:
     elif isinstance(msg, RateLimitEvent):
         events.append(DriverEvent(
             type="rate_limit",
-            data={"info": msg.get("rate_limit_info")},
+            data={"info": msg.rate_limit_info.raw},
             raw=msg,
         ))
 

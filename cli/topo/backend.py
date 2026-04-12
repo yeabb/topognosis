@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any
 
 import httpx
@@ -7,7 +8,7 @@ from .auth import get_access_token, get_refresh_token, save_tokens
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_BASE_URL = os.getenv("TOPO_BASE_URL", "http://localhost:8000")
 
 
 class BackendError(Exception):
