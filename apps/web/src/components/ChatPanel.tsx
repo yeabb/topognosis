@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import Tooltip from './Tooltip'
+
 import type { Graph, Message } from '../types/index'
 
 interface Model {

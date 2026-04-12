@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib'
 import { NetworkStack } from '../lib/network-stack'
 import { DataStack } from '../lib/data-stack'
 import { AppStack } from '../lib/app-stack'
+import { FrontendStack } from '../lib/frontend-stack'
 
 const app = new cdk.App()
 
@@ -18,6 +19,11 @@ const data = new DataStack(app, 'TopognosisData', {
   vpc: network.vpc,
   dbSg: network.dbSg,
   redisSg: network.redisSg,
+})
+
+new FrontendStack(app, 'TopognosisFrontend', {
+  env,
+  albDnsName: 'Topogn-Alb16-7sN2cVbzUono-908528665.us-east-1.elb.amazonaws.com',
 })
 
 new AppStack(app, 'TopognosisApp', {
