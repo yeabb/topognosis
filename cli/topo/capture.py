@@ -79,6 +79,19 @@ class EventCapture:
     # Public recording methods — called from session.py
     # ------------------------------------------------------------------
 
+    async def record_branch(self, branched_from_event_id: str) -> None:
+        """Record a branch event. Called by NodeManager when the current node is frozen
+        and a new child node is created. branched_from_event_id is the exact event in
+        the parent node's chain where the split happened."""
+        event = self._build_event(
+            event_type="branch",
+            tool_name="",
+            tool_use_id="",
+            data={},
+            branched_from_event_id=branched_from_event_id,
+        )
+        await self._record(event)
+
     async def record_user_message(self, text: str) -> None:
         """Record a user prompt before it's sent to the driver."""
         event = self._build_event(
@@ -149,11 +162,15 @@ class EventCapture:
         tool_name: str,
         tool_use_id: str,
         data: dict[str, Any],
+        branched_from_event_id: str | None = None,
     ) -> dict[str, Any]:
+        # event_type strings must match EventType constants in
+        # backend/nodes/event_types.py — that file is the single source of truth.
         event_id = str(uuid.uuid4())
         event = {
             "id": event_id,
             "parent_event_id": self._last_event_id,
+            "branched_from_event_id": branched_from_event_id,  # set by NodeManager on branch events
             "type": event_type,
             "tool_name": tool_name,
             "tool_use_id": tool_use_id,
