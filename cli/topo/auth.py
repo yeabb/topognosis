@@ -2,7 +2,10 @@ import json
 import os
 from pathlib import Path
 
+import httpx
+
 CONFIG_PATH = Path.home() / ".topo" / "config.json"
+DEFAULT_BASE_URL = os.getenv("TOPO_BASE_URL", "http://localhost:8000")
 
 
 def is_authenticated() -> bool:
@@ -36,6 +39,47 @@ def clear_tokens() -> None:
         CONFIG_PATH.write_text(json.dumps(config, indent=2))
 
 
+def login(email: str, password: str, base_url: str = DEFAULT_BASE_URL) -> dict[str, str]:
+    """Exchange credentials for JWT tokens. Returns {"access": ..., "refresh": ...}.
+    Sync — intended for CLI use only, outside any async session context.
+    """
+    from .backend import BackendError  # avoid circular at module level
+
+    resp = httpx.post(
+        f"{base_url.rstrip('/')}/api/auth/login/",
+        json={"email": email, "password": password},
+        timeout=15,
+    )
+    if resp.status_code == 401:
+        raise BackendError(401, "Invalid email or password.")
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json().get("detail") or resp.text
+        except Exception:
+            detail = resp.text
+        raise BackendError(resp.status_code, detail)
+    return resp.json()
+
+
+def login_command() -> None:
+    import click
+
+    click.echo("Log in to Topognosis")
+    email = click.prompt("Email")
+    password = click.prompt("Password", hide_input=True)
+
+    from .backend import BackendError
+
+    try:
+        tokens = login(email, password)
+    except BackendError as exc:
+        click.echo(f"Login failed: {exc.detail}", err=True)
+        raise SystemExit(1)
+
+    save_tokens(tokens["access"], tokens["refresh"])
+    click.echo("Logged in successfully.")
+
+
 def _load_config() -> dict:
     if not CONFIG_PATH.exists():
         return {}
@@ -43,22 +87,3 @@ def _load_config() -> dict:
         return json.loads(CONFIG_PATH.read_text())
     except (json.JSONDecodeError, OSError):
         return {}
-
-
-def login_command() -> None:
-    import click
-    from .backend import BackendClient, BackendError
-
-    click.echo("Log in to Topognosis")
-    email = click.prompt("Email")
-    password = click.prompt("Password", hide_input=True)
-
-    client = BackendClient()
-    try:
-        tokens = client.login(email, password)
-    except BackendError as exc:
-        click.echo(f"Login failed: {exc.detail}", err=True)
-        raise SystemExit(1)
-
-    save_tokens(tokens["access"], tokens["refresh"])
-    click.echo("Logged in successfully.")

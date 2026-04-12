@@ -57,7 +57,12 @@ def append_event(request, pk):
     except Node.DoesNotExist:
         return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    serializer = EventCreateSerializer(data=request.data)
+    # CLI sends 'type'; serializer expects 'event_type' — normalize here
+    data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
+    if 'type' in data and 'event_type' not in data:
+        data['event_type'] = data['type']
+
+    serializer = EventCreateSerializer(data=data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
