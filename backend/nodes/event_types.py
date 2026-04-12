@@ -25,10 +25,7 @@ class EventType:
     MERGE = "merge"         # two branches merged
     CHECKOUT = "checkout"   # user restored to a previous node
 
-    # ------------------------------------------------------------------
-    # Web surface only
-    # ------------------------------------------------------------------
-    COMPRESS = "compress"   # context compression (web owns this; CLI handles it differently)
+    COMPRESS = "compress"   # context compression — both surfaces, different mechanisms
 
     # ------------------------------------------------------------------
     # CLI surface — tool-driven events (all drivers)
@@ -47,12 +44,11 @@ class EventType:
     # Events exclusive to CLI
     CLI_ONLY_EVENTS = {PRE_TOOL_USE, POST_TOOL_USE, INTERRUPT}
 
-    # Events exclusive to web
-    WEB_ONLY_EVENTS = {COMPRESS}
+    # No web-only events currently — all graph lifecycle and message events are shared
 
     # Events shared across both surfaces
     SHARED_EVENTS = {
         MESSAGE_USER, MESSAGE_AI, MESSAGE_AI_THINKING,
         TURN_RESULT, RATE_LIMIT, ERROR,
-        BRANCH, MERGE, CHECKOUT,
+        BRANCH, MERGE, CHECKOUT, COMPRESS,
     }
