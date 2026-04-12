@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
+import webbrowser
 from pathlib import Path
 
 from rich.console import Console
@@ -35,12 +37,15 @@ DRIVERS = {
 }
 
 
-def start_session(driver_name: str = "claude", cwd: str | None = None) -> None:
+FRONTEND_URL = os.getenv("TOPO_FRONTEND_URL", "http://localhost:3000")
+
+
+def start_session(driver_name: str = "claude", cwd: str | None = None, no_browser: bool = False) -> None:
     """Entry point called by `topo` (no subcommand). Runs the async REPL."""
-    asyncio.run(_run(driver_name=driver_name, cwd=cwd or str(Path.cwd())))
+    asyncio.run(_run(driver_name=driver_name, cwd=cwd or str(Path.cwd()), no_browser=no_browser))
 
 
-async def _run(driver_name: str, cwd: str) -> None:
+async def _run(driver_name: str, cwd: str, no_browser: bool = False) -> None:
     if driver_name not in DRIVERS:
         console.print(f"[red]Unknown driver '{driver_name}'. Available: {', '.join(DRIVERS)}[/red]")
         return
@@ -82,6 +87,12 @@ async def _run(driver_name: str, cwd: str) -> None:
 
     console.print(Rule(f"[bold]topo[/bold] · {project_name} · {driver_name}"))
     console.print(f"[dim]Graph {graph_id[:8]}  Node {node_id[:8]}  Session {session_id[:8]}[/dim]")
+
+    if not no_browser:
+        url = f"{FRONTEND_URL}/graphs/{graph_id}"
+        console.print(f"[dim]Opening graph → {url}[/dim]")
+        webbrowser.open(url)
+
     console.print("[dim]Type your prompt. Ctrl+C to end the session.[/dim]\n")
 
     try:

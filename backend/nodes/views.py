@@ -1,5 +1,7 @@
 import logging
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -8,6 +10,7 @@ from .models import Node, Event
 from .serializers import NodeSerializer, NodeUpdateSerializer, NodeCheckoutSerializer, EventCreateSerializer
 
 logger = logging.getLogger(__name__)
+channel_layer = get_channel_layer()
 
 
 class NodeListCreateView(generics.ListCreateAPIView):
@@ -72,6 +75,15 @@ def append_event(request, pk):
     # This gives a fast O(1) ordered access without traversing the linked list.
     node.delta_events = node.delta_events + [str(event.id)]
     node.save(update_fields=['delta_events', 'updated_at'])
+
+    # Broadcast to any browser watching this graph via WebSocket
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f'graph_{node.graph_id}',
+            {'type': 'graph_event', 'data': dict(data)},
+        )
+    except Exception as exc:
+        logger.warning('Failed to broadcast event to WebSocket: %s', exc)
 
     logger.info('Event %s (%s) appended to node %s', event.id, event.event_type, node.id)
     return Response(EventCreateSerializer(event).data, status=status.HTTP_201_CREATED)
