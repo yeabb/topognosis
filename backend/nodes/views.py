@@ -4,8 +4,8 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from .models import Node
-from .serializers import NodeSerializer, NodeUpdateSerializer, NodeCheckoutSerializer
+from .models import Node, Event
+from .serializers import NodeSerializer, NodeUpdateSerializer, NodeCheckoutSerializer, EventCreateSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,30 @@ def checkout_node(request, pk):
         'git_hash': node.git_hash,
     })
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def append_event(request, pk):
+    """Append a delta_event to a node. Used by the CLI to stream events in real time."""
+    try:
+        node = Node.objects.get(pk=pk, graph__owner=request.user)
+    except Node.DoesNotExist:
+        return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = EventCreateSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    event = serializer.save(node=node)
+
+    # Keep delta_events on the Node in sync as an ordered list of IDs.
+    # This gives a fast O(1) ordered access without traversing the linked list.
+    node.delta_events = node.delta_events + [str(event.id)]
+    node.save(update_fields=['delta_events', 'updated_at'])
+
+    logger.info('Event %s (%s) appended to node %s', event.id, event.event_type, node.id)
+    return Response(EventCreateSerializer(event).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])

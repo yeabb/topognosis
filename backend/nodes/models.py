@@ -48,21 +48,26 @@ class Node(models.Model):
 
 
 class Event(models.Model):
-    EVENT_TYPES = [
-        ('message_user', 'User Message'),
-        ('message_ai', 'AI Message'),
-        ('tool_call', 'Tool Call'),
-        ('tool_result', 'Tool Result'),
-        ('branch', 'Branch'),
-        ('merge', 'Merge'),
-        ('compress', 'Compression'),
-        ('checkout', 'Checkout'),
-    ]
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='events')
-    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+
+    # Free-text — no DB constraint. Use EventType constants from event_types.py.
+    event_type = models.CharField(max_length=50)
+
+    # Linked-list pointer to the previous event in this node's chain.
+    # Null on the first event of a node.
+    parent_event_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    # For CLI events that mutate filesystem state: the shadow-repo commit hash
+    # captured by SnapshotManager after the tool call completed.
+    snapshot_hash = models.CharField(max_length=40, blank=True)
+
+    # Tool name (CLI surface — populated for pre/post_tool_use events)
+    tool_name = models.CharField(max_length=100, blank=True)
+
+    # All other event-specific data
     payload = models.JSONField(default=dict)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
