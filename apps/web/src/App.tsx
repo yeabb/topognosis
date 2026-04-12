@@ -4,7 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import AppShell from './pages/AppShell'
-import GraphPage from './pages/GraphPage'
+import SessionGraphPage from './pages/SessionGraphPage'
 
 function App() {
   return (
@@ -25,7 +25,7 @@ function App() {
             path="/graphs/:graphId"
             element={
               <ProtectedRoute>
-                <GraphPage />
+                <SessionGraphPage />
               </ProtectedRoute>
             }
           />
