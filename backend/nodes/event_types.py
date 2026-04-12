@@ -19,12 +19,16 @@ class EventType:
     ERROR = "error"                                  # error event from the driver
 
     # ------------------------------------------------------------------
-    # Web surface only — graph/context management events
+    # Shared — graph lifecycle events (both surfaces)
     # ------------------------------------------------------------------
-    BRANCH = "branch"
-    MERGE = "merge"
-    COMPRESS = "compress"
-    CHECKOUT = "checkout"
+    BRANCH = "branch"       # node branch created
+    MERGE = "merge"         # two branches merged
+    CHECKOUT = "checkout"   # user restored to a previous node
+
+    # ------------------------------------------------------------------
+    # Web surface only
+    # ------------------------------------------------------------------
+    COMPRESS = "compress"   # context compression (web owns this; CLI handles it differently)
 
     # ------------------------------------------------------------------
     # CLI surface — tool-driven events (all drivers)
@@ -44,10 +48,11 @@ class EventType:
     CLI_ONLY_EVENTS = {PRE_TOOL_USE, POST_TOOL_USE, INTERRUPT}
 
     # Events exclusive to web
-    WEB_ONLY_EVENTS = {BRANCH, MERGE, COMPRESS, CHECKOUT}
+    WEB_ONLY_EVENTS = {COMPRESS}
 
     # Events shared across both surfaces
     SHARED_EVENTS = {
         MESSAGE_USER, MESSAGE_AI, MESSAGE_AI_THINKING,
         TURN_RESULT, RATE_LIMIT, ERROR,
+        BRANCH, MERGE, CHECKOUT,
     }
