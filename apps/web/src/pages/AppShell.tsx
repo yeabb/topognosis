@@ -132,7 +132,7 @@ export default function AppShell() {
       const body: Record<string, string> = { message: content, model }
       if (nodeId) body.node_id = nodeId
 
-      const response = await fetch(`/api/graphs/${graphId}/chat/`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/graphs/${graphId}/chat/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -243,7 +243,7 @@ export default function AppShell() {
           </svg>
         </button>
 
-        <PanelGroup direction="horizontal" className="flex-1">
+        <PanelGroup orientation="horizontal" className="flex-1">
           <Panel defaultSize={60} minSize={30}>
             <ChatPanel
               activeGraph={activeGraph}

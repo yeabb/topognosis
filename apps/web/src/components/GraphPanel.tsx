@@ -213,8 +213,8 @@ interface Props {
 }
 
 export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode, onBranchFromNode }: Props) {
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState([])
-  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState([])
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowNode>([])
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   const buildGraph = useCallback(() => {
     if (nodes.length === 0) {
