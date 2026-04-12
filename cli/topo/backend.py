@@ -18,30 +18,21 @@ class BackendError(Exception):
 
 
 class BackendClient:
+    """
+    Async HTTP client for the Topognosis backend.
+
+    Lifecycle: create inside an async context (e.g. _run()), call aclose() when done.
+    For CLI login (sync, pre-session), use auth.login() directly — not this class.
+    """
+
     def __init__(self, base_url: str = DEFAULT_BASE_URL) -> None:
         self.base_url = base_url.rstrip("/")
-        # Shared async client — created once, reused across all session requests.
-        # Call aclose() when the session ends.
+        # Persistent connection pool — reused across all session requests.
+        # Only instantiate this class inside an async context so aclose() is always called.
         self._client = httpx.AsyncClient(timeout=15)
 
     async def aclose(self) -> None:
         await self._client.aclose()
-
-    # ------------------------------------------------------------------
-    # Auth — sync, called from CLI login command (not inside async session)
-    # ------------------------------------------------------------------
-
-    def login(self, email: str, password: str) -> dict[str, str]:
-        """Exchange credentials for JWT tokens. Returns {"access": ..., "refresh": ...}."""
-        resp = httpx.post(
-            f"{self.base_url}/api/auth/login/",
-            json={"email": email, "password": password},
-            timeout=15,
-        )
-        if resp.status_code == 401:
-            raise BackendError(401, "Invalid email or password.")
-        _raise_for_status(resp)
-        return resp.json()
 
     async def _refresh_access_token(self) -> str:
         """Use the stored refresh token to get a new access token."""
