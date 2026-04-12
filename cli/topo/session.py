@@ -101,16 +101,18 @@ async def _run(driver_name: str, cwd: str) -> None:
             if not prompt.strip():
                 continue
 
-            # ---- Send to driver ----
+            # ---- Record + send to driver ----
             try:
+                await capture.record_user_message(prompt.strip())
                 await driver.send(prompt.strip())
             except Exception as exc:
                 console.print(f"[red]Error sending prompt: {exc}[/red]")
                 continue
 
-            # ---- Stream response ----
+            # ---- Stream + record response ----
             try:
                 async for event in driver.receive():
+                    await capture.record_driver_event(event)
                     _render_event(event)
             except KeyboardInterrupt:
                 console.print("\n[yellow]Interrupted.[/yellow]")

@@ -1,15 +1,17 @@
 """
-EventCapture — wires into driver hooks to record every tool call as a
-delta_event. Writes a local JSONL append-log for crash safety and
-streams events to the backend.
+EventCapture — records every event in the session as a delta_event.
+Writes a local JSONL append-log for crash safety and streams to the backend.
 
-Architecture:
-  - Registered as pre/post tool hooks on the driver before connect()
-  - Each event gets a uuid + parent_event_id (linked list structure)
-  - Side-effecting tools (Edit, Write, Bash, etc.) trigger a snapshot_hash
-    after the event (handled by SnapshotManager, Task #9)
-  - All events are written to ~/.topo/sessions/<session_id>.jsonl first,
-    then sent to the backend — local log is the source of truth on crash
+Three event sources:
+  1. User messages     — record_user_message() called from session.py before send()
+  2. Assistant text    — record_driver_event() called from session.py for each DriverEvent
+  3. Tool calls        — pre/post hooks registered on the driver (fire mid-response)
+
+Each event gets a uuid + parent_event_id forming a linked list, so the full
+conversation can be reconstructed in order and branching points are precise.
+
+All events hit the local JSONL log first, then the backend — local log is
+the source of truth on crash.
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .backend import BackendClient
-    from .drivers.base import BaseDriver, ToolHookPayload
+    from .drivers.base import BaseDriver, DriverEvent, ToolHookPayload
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +76,44 @@ class EventCapture:
         self._log_file.close()
 
     # ------------------------------------------------------------------
-    # Hook callbacks
+    # Public recording methods — called from session.py
+    # ------------------------------------------------------------------
+
+    async def record_user_message(self, text: str) -> None:
+        """Record a user prompt before it's sent to the driver."""
+        event = self._build_event(
+            event_type="message_user",
+            tool_name="",
+            tool_use_id="",
+            data={"text": text},
+        )
+        await self._record(event)
+
+    async def record_driver_event(self, event: "DriverEvent") -> None:
+        """Record a DriverEvent from the response stream (text, result, etc.)."""
+        # Tool calls are captured via hooks (pre/post_tool_use) — skip here to avoid duplication
+        if event.type in ("tool_use", "tool_result"):
+            return
+
+        type_map = {
+            "text": "message_ai",
+            "thinking": "message_ai_thinking",
+            "result": "turn_result",
+            "rate_limit": "rate_limit",
+            "error": "error",
+        }
+        event_type = type_map.get(event.type, event.type)
+
+        recorded = self._build_event(
+            event_type=event_type,
+            tool_name="",
+            tool_use_id="",
+            data=event.data,
+        )
+        await self._record(recorded)
+
+    # ------------------------------------------------------------------
+    # Hook callbacks — fired by the driver for tool calls
     # ------------------------------------------------------------------
 
     async def _on_pre_tool(self, payload: "ToolHookPayload") -> None:
