@@ -58,6 +58,12 @@ class Event(models.Model):
     # Null on the first event of a node.
     parent_event_id = models.UUIDField(null=True, blank=True, db_index=True)
 
+    # For branch events only: the exact event in the PARENT node where this branch split off.
+    # This is what makes the DAG precise — not just "branched from node X" but
+    # "branched from event Y inside node X, at that exact point in the chain."
+    # Null on root nodes and on any event that isn't a branch point.
+    branched_from_event_id = models.UUIDField(null=True, blank=True, db_index=True)
+
     # For CLI events that mutate filesystem state: the shadow-repo commit hash
     # captured by SnapshotManager after the tool call completed.
     snapshot_hash = models.CharField(max_length=40, blank=True)

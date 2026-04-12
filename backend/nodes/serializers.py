@@ -7,7 +7,7 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = (
             'id', 'node', 'event_type',
-            'parent_event_id', 'snapshot_hash', 'tool_name',
+            'parent_event_id', 'branched_from_event_id', 'snapshot_hash', 'tool_name',
             'payload', 'created_at',
         )
         read_only_fields = ('id', 'created_at')
@@ -19,7 +19,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
         model = Event
         fields = (
             'id', 'event_type',
-            'parent_event_id', 'snapshot_hash', 'tool_name',
+            'parent_event_id', 'branched_from_event_id', 'snapshot_hash', 'tool_name',
             'payload', 'created_at',
         )
         read_only_fields = ('id', 'created_at')
