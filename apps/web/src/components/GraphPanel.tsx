@@ -39,6 +39,7 @@ interface NodeData {
   model: string
   messageCount: number
   isActive: boolean
+  isSelected: boolean
   isStreaming: boolean
   isBranch: boolean
   branchOriginSnippet: string
@@ -71,9 +72,9 @@ function ConversationNode({ data }: NodeProps) {
           height: NODE_HEIGHT,
           borderRadius: 12,
           padding: '10px 12px 8px',
-          background: d.isActive ? '#1a1f2e' : '#141414',
-          border: d.isActive ? '1.5px solid #6366f1' : '1px solid rgba(255,255,255,0.07)',
-          boxShadow: d.isActive ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
+          background: d.isActive ? '#1a1f2e' : d.isSelected ? '#181818' : '#141414',
+          border: d.isActive ? '1.5px solid #6366f1' : d.isSelected ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.07)',
+          boxShadow: d.isActive ? '0 0 0 3px rgba(99,102,241,0.15)' : d.isSelected ? '0 0 0 3px rgba(255,255,255,0.05)' : 'none',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -207,12 +208,13 @@ const nodeTypes = { conversation: ConversationNode }
 interface Props {
   nodes: Node[]
   activeNodeId: string | null
+  selectedNodeId?: string | null
   loading: boolean
   onSelectNode: (node: Node) => void
   onBranchFromNode: (node: Node) => void
 }
 
-export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode, onBranchFromNode }: Props) {
+export default function GraphPanel({ nodes, activeNodeId, selectedNodeId, loading, onSelectNode, onBranchFromNode }: Props) {
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowNode>([])
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([])
 
@@ -239,6 +241,7 @@ export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode,
           model: n.model,
           messageCount: n.materialized_context.length,
           isActive: n.id === activeNodeId,
+          isSelected: n.id === selectedNodeId,
           isStreaming: n.id === activeNodeId && loading,
           isBranch,
           branchOriginSnippet,
@@ -266,7 +269,7 @@ export default function GraphPanel({ nodes, activeNodeId, loading, onSelectNode,
     const laid = layoutGraph(raw, edges)
     setFlowNodes(laid)
     setFlowEdges(edges)
-  }, [nodes, activeNodeId, loading, onSelectNode, onBranchFromNode, setFlowNodes, setFlowEdges])
+  }, [nodes, activeNodeId, selectedNodeId, loading, onSelectNode, onBranchFromNode, setFlowNodes, setFlowEdges])
 
   useEffect(() => {
     buildGraph()

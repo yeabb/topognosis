@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as any)?.from?.pathname ?? '/'
 
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -16,10 +18,10 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await login(username, password)
-      navigate('/')
+      await login(email, password)
+      navigate(from, { replace: true })
     } catch {
-      setError('Invalid username or password.')
+      setError('Invalid email or password.')
     } finally {
       setLoading(false)
     }
@@ -38,15 +40,15 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-neutral-400 text-xs uppercase tracking-wider">Username</label>
+              <label className="text-neutral-400 text-xs uppercase tracking-wider">Email</label>
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
                 className="rounded-lg bg-white/[0.05] border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder:text-neutral-600 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition"
-                placeholder="your_username"
+                placeholder="you@example.com"
               />
             </div>
 

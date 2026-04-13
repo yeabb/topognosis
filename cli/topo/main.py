@@ -4,8 +4,9 @@ from topo.session import start_session
 
 
 @click.group(invoke_without_command=True)
+@click.option('--no-browser', is_flag=True, default=False, help='Do not open the graph in the browser.')
 @click.pass_context
-def cli(ctx: click.Context) -> None:
+def cli(ctx: click.Context, no_browser: bool) -> None:
     """Topo — graph layer on top of Claude.
 
     Run `topo` to start an interactive session.
@@ -16,7 +17,7 @@ def cli(ctx: click.Context) -> None:
         if not is_authenticated():
             click.echo("Not logged in. Run `topo login` first.")
             raise SystemExit(1)
-        start_session()
+        start_session(no_browser=no_browser)
 
 
 @cli.command()
