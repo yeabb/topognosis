@@ -6,7 +6,7 @@ import type { User } from '../types'
 interface AuthContextValue {
   user: User | null
   loading: boolean
-  login: (username: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<void>
   register: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
 }
@@ -34,9 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
-  async function login(username: string, password: string) {
+  async function login(email: string, password: string) {
     const res = await client.post<{ access: string; refresh: string }>('/auth/login/', {
-      username,
+      email,
       password,
     })
     localStorage.setItem('access_token', res.data.access)
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function register(username: string, email: string, password: string) {
     await client.post('/auth/register/', { username, email, password })
-    await login(username, password)
+    await login(email, password)
   }
 
   function logout() {

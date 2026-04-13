@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import GraphPanel from '../components/GraphPanel'
 import client from '../api/client'
 import type { Graph, Node } from '../types/index'
@@ -127,9 +128,8 @@ export default function GraphPage() {
       </div>
 
       {/* Body */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Graph canvas */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+      <PanelGroup orientation="horizontal" className="flex-1">
+        <Panel defaultSize={65} minSize={30}>
           <GraphPanel
             nodes={nodes}
             activeNodeId={activeNodeId}
@@ -137,36 +137,33 @@ export default function GraphPage() {
             onSelectNode={() => {}}
             onBranchFromNode={() => {}}
           />
-        </div>
+        </Panel>
+
+        <PanelResizeHandle className="w-[1px] bg-white/[0.08] hover:bg-indigo-500/60 hover:w-[2px] transition-all cursor-col-resize" />
 
         {/* Event feed */}
-        <div style={{
-          width: 320,
-          flexShrink: 0,
-          borderLeft: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 11, color: '#4b5563', flexShrink: 0 }}>
-            ACTIVITY
+        <Panel defaultSize={35} minSize={15}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 11, color: '#4b5563', flexShrink: 0 }}>
+              ACTIVITY
+            </div>
+            <div
+              ref={feedRef}
+              style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}
+            >
+              {events.length === 0 ? (
+                <div style={{ padding: '16px 14px', fontSize: 12, color: '#374151' }}>
+                  Waiting for session activity…
+                </div>
+              ) : (
+                events.map((ev, i) => (
+                  <EventRow key={ev.id ?? i} event={ev} />
+                ))
+              )}
+            </div>
           </div>
-          <div
-            ref={feedRef}
-            style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}
-          >
-            {events.length === 0 ? (
-              <div style={{ padding: '16px 14px', fontSize: 12, color: '#374151' }}>
-                Waiting for session activity…
-              </div>
-            ) : (
-              events.map((ev, i) => (
-                <EventRow key={ev.id ?? i} event={ev} />
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+        </Panel>
+      </PanelGroup>
     </div>
   )
 }
